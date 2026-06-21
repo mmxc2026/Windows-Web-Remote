@@ -1,5 +1,7 @@
 # Security Policy
 
+**简体中文** · [English](SECURITY_EN.md)
+
 ## 适用场景
 
 Windows Web Remote 设计用于用户本人设备之间的临时远程控制。请勿将其部署为公开服务、多人共享服务或无人值守的生产级远控平台。

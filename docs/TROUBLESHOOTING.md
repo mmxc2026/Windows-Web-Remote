@@ -1,5 +1,7 @@
 # 故障排查
 
+**简体中文** · [English](en/TROUBLESHOOTING.md)
+
 ## 双击后窗口闪退
 
 请从完整解压后的目录运行。查看根目录的 `startup-error.log`。如果 `tools/python/` 只下载了一部分，删除该目录后重新启动。

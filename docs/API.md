@@ -1,5 +1,7 @@
 # API
 
+**简体中文** · [English](en/API.md)
+
 所有控制 API 均要求访问 token。GET 请求可使用查询参数 `token`，POST 请求使用 `X-Control-Token` 请求头。
 
 | 方法 | 路径 | 用途 |

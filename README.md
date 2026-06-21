@@ -6,6 +6,8 @@
 
 无需安装手机 App · 支持局域网与临时 HTTPS 外网连接
 
+**简体中文** · [English](README_EN.md)
+
 [快速开始](#快速开始) · [功能](#功能) · [使用指南](docs/USAGE.md) · [故障排查](docs/TROUBLESHOOTING.md) · [安全说明](SECURITY.md)
 
 </div>

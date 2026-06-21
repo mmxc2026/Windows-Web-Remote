@@ -1,5 +1,7 @@
 # 架构说明
 
+**简体中文** · [English](en/ARCHITECTURE.md)
+
 ```mermaid
 flowchart LR
     P["手机浏览器"] -->|HTTPS / HTTP| T["Cloudflare Tunnel（可选）"]

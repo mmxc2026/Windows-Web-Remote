@@ -1,5 +1,7 @@
 # 使用指南
 
+**简体中文** · [English](en/USAGE.md)
+
 ## 首次启动
 
 双击 `start-local.bat` 或 `start-internet.bat`。启动器会：
