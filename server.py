@@ -415,21 +415,6 @@ def available_name(directory, supplied_name):
     raise ValueError("too many files with the same name")
 
 
-def focused_accepts_text():
-    try:
-        import uiautomation as automation
-        control = automation.GetFocusedControl()
-        if control is None:
-            return False
-        return control.ControlTypeName in {
-            "EditControl",
-            "ComboBoxControl",
-            "SpinnerControl",
-        } and bool(control.IsKeyboardFocusable)
-    except Exception:
-        return False
-
-
 def button_flag(button, down):
     if button == "right":
         return MOUSEEVENTF_RIGHTDOWN if down else MOUSEEVENTF_RIGHTUP
@@ -550,10 +535,6 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.wfile.write(body)
             except (RuntimeError, ValueError) as exc:
                 return self.send_json(503, {"error": str(exc)})
-        if path == "/api/focus":
-            if not self.authorized():
-                return self.send_json(403, {"error": "forbidden"})
-            return self.send_json(200, {"acceptsText": focused_accepts_text()})
         if path == "/api/files":
             if not self.authorized():
                 return self.send_json(403, {"error": "forbidden"})

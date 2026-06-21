@@ -35,8 +35,6 @@
     .camera-panel{position:fixed;z-index:200;inset:0;background:#000;display:grid;place-items:center}
     .camera-panel[hidden]{display:none}.camera-panel img{width:100%;height:100%;object-fit:contain}
     #closeCamera{position:absolute;top:max(12px,env(safe-area-inset-top));right:max(12px,env(safe-area-inset-right));z-index:2;background:#151a24dd;padding:0 15px}
-    #mobileKeyboard{position:fixed;z-index:300;left:50%;bottom:0;width:2px;height:2px;opacity:.01;border:0;padding:0;font-size:16px;pointer-events:none}
-    body.keyboard-open #mobileKeyboard{left:10px;right:10px;bottom:max(10px,env(safe-area-inset-bottom));width:calc(100% - 20px);height:44px;opacity:1;pointer-events:auto;border:1px solid #53617a;border-radius:10px;padding:8px 12px;background:#151a24;color:#fff}
     .fullscreen-text-panel{display:none;position:fixed;z-index:310;left:8px;right:8px;bottom:max(8px,env(safe-area-inset-bottom));gap:7px;padding:8px;border:1px solid #53617a;border-radius:12px;background:#151a24ee}
     body.text-panel-open .fullscreen-text-panel{display:flex}.fullscreen-text-panel input{height:46px}.fullscreen-text-panel button{min-height:46px;padding:0 14px}.fullscreen-text-panel .close-text{background:#333b4b}
   </style>
@@ -81,7 +79,6 @@
   <div class="camera-panel" id="cameraPanel" hidden>
     <img id="cameraImage" alt="电脑摄像头"><button id="closeCamera">关闭摄像头</button>
   </div>
-  <textarea id="mobileKeyboard" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="输入内容将发送到电脑" aria-label="手机键盘输入"></textarea>
   <div class="fullscreen-text-panel" id="fullscreenTextPanel">
     <input id="fullscreenText" type="text" enterkeyhint="send" placeholder="在这里输入文字">
     <button id="sendFullscreenText" class="primary">发送</button>
@@ -121,7 +118,6 @@ function imagePoint(e){
 const screenWrap=document.querySelector('#screenWrap');
 const fullscreenBtn=document.querySelector('#fullscreenBtn'),exitFullscreen=document.querySelector('#exitFullscreen');
 const showKeyboard=document.querySelector('#showKeyboard');
-const mobileKeyboard=document.querySelector('#mobileKeyboard');
 const textInputBtn=document.querySelector('#textInputBtn'),fullscreenText=document.querySelector('#fullscreenText');
 let nativeFullscreen=false;
 async function enterFullscreen(){
@@ -132,10 +128,8 @@ async function enterFullscreen(){
 }
 async function leaveFullscreen(){
   document.body.classList.remove('fullscreen-view');
-  document.body.classList.remove('keyboard-open');
   document.body.classList.remove('text-panel-open');
   fullscreenText.blur();
-  mobileKeyboard.blur();
   nativeFullscreen=false;
   if(document.fullscreenElement&&document.exitFullscreen){try{await document.exitFullscreen()}catch{}}
 }
@@ -144,7 +138,7 @@ exitFullscreen.addEventListener('pointerdown',e=>e.stopPropagation());
 exitFullscreen.addEventListener('click',e=>{e.stopPropagation();leaveFullscreen()});
 showKeyboard.addEventListener('pointerdown',e=>e.stopPropagation());
 showKeyboard.addEventListener('click',e=>{
-  e.stopPropagation();mobileKeyboard.blur();document.body.classList.remove('keyboard-open');
+  e.stopPropagation();
   command({type:'open_keyboard'});
 });
 textInputBtn.addEventListener('pointerdown',e=>e.stopPropagation());
@@ -175,48 +169,6 @@ function releaseDirect(){
   if(directDown){command({type:'button',button:'left',action:'up'});directDown=false}
   direct=null;
 }
-function resetMobileKeyboard(){
-  mobileKeyboard.value='\u200b';
-  try{mobileKeyboard.setSelectionRange(1,1)}catch{}
-}
-function openMobileKeyboard(){
-  document.body.classList.add('keyboard-open');
-  resetMobileKeyboard();
-  try{mobileKeyboard.focus({preventScroll:true})}catch{mobileKeyboard.focus()}
-}
-mobileKeyboard.addEventListener('blur',()=>document.body.classList.remove('keyboard-open'));
-async function maybeOpenMobileKeyboard(){
-  if(!document.body.classList.contains('fullscreen-view'))return;
-  try{
-    const response=await fetch('/api/focus?token='+encodeURIComponent(token)+'&t='+Date.now());
-    if(!response.ok)return;
-    const result=await response.json();
-    if(result.acceptsText)openMobileKeyboard();
-    else mobileKeyboard.blur();
-  }catch{}
-}
-let mobileKeyboardComposing=false,ignoreNextKeyboardInput=false;
-mobileKeyboard.addEventListener('input',event=>{
-  if(mobileKeyboardComposing)return;
-  if(ignoreNextKeyboardInput){ignoreNextKeyboardInput=false;resetMobileKeyboard();return}
-  const inserted=mobileKeyboard.value.replaceAll('\u200b','');
-  if(inserted)command({type:'text',text:inserted});
-  else if(event.inputType&&event.inputType.startsWith('delete'))command({type:'key',keys:['backspace']});
-  resetMobileKeyboard();
-});
-mobileKeyboard.addEventListener('compositionstart',()=>{mobileKeyboardComposing=true});
-mobileKeyboard.addEventListener('compositionend',event=>{
-  mobileKeyboardComposing=false;
-  const text=mobileKeyboard.value.replaceAll('\u200b','')||event.data;
-  if(text)command({type:'text',text});
-  ignoreNextKeyboardInput=true;resetMobileKeyboard();
-  setTimeout(()=>{ignoreNextKeyboardInput=false},0);
-});
-mobileKeyboard.addEventListener('keydown',event=>{
-  const keys={Enter:'enter',Backspace:'backspace',Tab:'tab',Escape:'esc',ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down'};
-  const key=keys[event.key];
-  if(key){event.preventDefault();command({type:'key',keys:[key]});resetMobileKeyboard()}
-});
 screenWrap.addEventListener('pointerdown',e=>{
   if(direct)return;e.preventDefault();screenWrap.setPointerCapture(e.pointerId);
   const p=imagePoint(e);direct={id:e.pointerId,startX:e.clientX,startY:e.clientY,moved:false,long:false};
