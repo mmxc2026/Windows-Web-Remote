@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <meta name="theme-color" content="#10131a">
+  <title>Windows Web Remote</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:#10131a;color:#eef1f6;font:15px system-ui,sans-serif;overscroll-behavior:none}
+    header{height:48px;padding:0 10px 0 14px;display:flex;align-items:center;gap:10px;background:#181d27}
+    header strong{flex:1}#fullscreenBtn{min-height:34px;padding:0 12px;background:#3767d6}
+    #status{font-size:12px;color:#7ee787}.screen-wrap{background:#000;position:relative;touch-action:none}
+    #screen{display:block;width:100%;aspect-ratio:16/9;object-fit:contain}.hint{position:absolute;right:8px;bottom:8px;color:#fff9;font-size:11px;pointer-events:none}
+    .pad{height:31vh;min-height:170px;margin:10px;border:1px solid #343b49;border-radius:15px;background:#171c25;touch-action:none;display:grid;place-items:center;color:#8a94a7}
+    .buttons,.keys{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:0 10px 10px}
+    button{min-height:46px;border:0;border-radius:11px;background:#272e3c;color:#f1f3f7;font-size:14px}button:active{background:#3c465a}
+    .primary{background:#3767d6}.input-row{display:flex;gap:8px;padding:0 10px 10px}input{min-width:0;flex:1;border:1px solid #343b49;border-radius:11px;padding:0 12px;background:#171c25;color:white;font-size:16px}
+    .input-row button{padding:0 18px}@media (orientation:landscape){.pad{height:24vh}.screen-wrap{max-width:720px;margin:auto}}
+    #exitFullscreen,#showKeyboard,#textInputBtn{display:none;position:absolute;z-index:5;top:max(10px,env(safe-area-inset-top));min-height:40px;padding:0 12px;background:#151a24dd;box-shadow:0 2px 12px #0008}
+    #exitFullscreen{right:max(10px,env(safe-area-inset-right))}#showKeyboard{right:max(100px,calc(env(safe-area-inset-right) + 100px))}#textInputBtn{right:max(206px,calc(env(safe-area-inset-right) + 206px));background:#3767d6dd}
+    body.fullscreen-view{overflow:hidden;background:#000}
+    body.fullscreen-view header,body.fullscreen-view .controls{display:none}
+    body.fullscreen-view .screen-wrap{position:fixed;inset:0;z-index:100;max-width:none;margin:0;width:100vw;height:100vh}
+    body.fullscreen-view #screen{width:100%;height:100%;aspect-ratio:auto;object-fit:contain}
+    body.fullscreen-view #exitFullscreen,body.fullscreen-view #showKeyboard,body.fullscreen-view #textInputBtn{display:block}
+    .tools{margin:0 10px 12px;padding:12px;border:1px solid #343b49;border-radius:13px;background:#171c25}
+    .tools h3{margin:0 0 10px;font-size:14px}.tool-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    .tool-grid button.active{background:#b44747}.file-row{display:flex;gap:8px;margin-top:10px}.file-row input{display:none}
+    .talk-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}.talk-grid button{touch-action:none}
+    .talk-grid button.active{background:#b44747}
+    .file-row label{display:grid;place-items:center;min-height:44px;padding:0 13px;border-radius:11px;background:#3767d6;cursor:pointer}
+    #fileStatus{flex:1;align-self:center;color:#9da8ba;font-size:12px}.file-list{margin-top:10px;display:grid;gap:6px}
+    .file-item{display:flex;justify-content:space-between;gap:10px;padding:9px 10px;border-radius:9px;background:#222936;color:#dfe6f1;text-decoration:none}
+    .file-item small{color:#8e9aae;white-space:nowrap}
+    .camera-panel{position:fixed;z-index:200;inset:0;background:#000;display:grid;place-items:center}
+    .camera-panel[hidden]{display:none}.camera-panel img{width:100%;height:100%;object-fit:contain}
+    #closeCamera{position:absolute;top:max(12px,env(safe-area-inset-top));right:max(12px,env(safe-area-inset-right));z-index:2;background:#151a24dd;padding:0 15px}
+    #mobileKeyboard{position:fixed;z-index:300;left:50%;bottom:0;width:2px;height:2px;opacity:.01;border:0;padding:0;font-size:16px;pointer-events:none}
+    body.keyboard-open #mobileKeyboard{left:10px;right:10px;bottom:max(10px,env(safe-area-inset-bottom));width:calc(100% - 20px);height:44px;opacity:1;pointer-events:auto;border:1px solid #53617a;border-radius:10px;padding:8px 12px;background:#151a24;color:#fff}
+    .fullscreen-text-panel{display:none;position:fixed;z-index:310;left:8px;right:8px;bottom:max(8px,env(safe-area-inset-bottom));gap:7px;padding:8px;border:1px solid #53617a;border-radius:12px;background:#151a24ee}
+    body.text-panel-open .fullscreen-text-panel{display:flex}.fullscreen-text-panel input{height:46px}.fullscreen-text-panel button{min-height:46px;padding:0 14px}.fullscreen-text-panel .close-text{background:#333b4b}
+  </style>
+</head>
+<body>
+  <header><strong>Windows Web Remote</strong><span id="status">连接中…</span><button id="fullscreenBtn">全屏</button></header>
+  <div class="screen-wrap" id="screenWrap">
+    <img id="screen" alt="电脑屏幕"><span class="hint">轻触点击 · 拖动窗口 · 长按右键</span>
+    <button id="textInputBtn" aria-label="输入文字">文字输入</button>
+    <button id="showKeyboard" aria-label="打开电脑屏幕键盘">电脑键盘</button>
+    <button id="exitFullscreen" aria-label="退出全屏">退出全屏</button>
+  </div>
+  <div class="controls">
+    <div class="pad" id="pad">触摸板 · 单指移动 · 双指滚动</div>
+    <div class="buttons">
+      <button data-click="left">左键</button><button data-click="right">右键</button>
+      <button data-key="ctrl,c">复制</button><button data-key="enter" class="primary">回车</button>
+    </div>
+    <div class="keys">
+      <button data-key="esc">Esc</button><button data-key="tab">Tab</button><button data-key="backspace">退格</button><button data-key="delete">删除</button>
+      <button data-key="left">←</button><button data-key="up">↑</button><button data-key="down">↓</button><button data-key="right">→</button>
+    </div>
+    <div class="input-row"><input id="text" placeholder="输入文字后发送"><button id="send" class="primary">发送</button></div>
+    <section class="tools">
+      <h3>媒体与文件</h3>
+      <div class="tool-grid">
+        <button id="systemAudio">电脑声音</button>
+        <button id="microphoneAudio">电脑麦克风</button>
+        <button id="openCamera">电脑摄像头</button>
+      </div>
+      <div class="talk-grid">
+        <button id="pushToTalk">按住说话</button>
+        <button id="liveTalk">开启实时对讲</button>
+      </div>
+      <div class="file-row">
+        <label for="uploadFile">上传到电脑</label><input id="uploadFile" type="file">
+        <button id="refreshFiles">刷新下载</button><span id="fileStatus"></span>
+      </div>
+      <div class="file-list" id="fileList"></div>
+    </section>
+  </div>
+  <div class="camera-panel" id="cameraPanel" hidden>
+    <img id="cameraImage" alt="电脑摄像头"><button id="closeCamera">关闭摄像头</button>
+  </div>
+  <textarea id="mobileKeyboard" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="输入内容将发送到电脑" aria-label="手机键盘输入"></textarea>
+  <div class="fullscreen-text-panel" id="fullscreenTextPanel">
+    <input id="fullscreenText" type="text" enterkeyhint="send" placeholder="在这里输入文字">
+    <button id="sendFullscreenText" class="primary">发送</button>
+    <button id="closeFullscreenText" class="close-text">关闭</button>
+  </div>
+<script>
+const token=new URLSearchParams(location.search).get('token')||'';
+const statusEl=document.querySelector('#status'),screen=document.querySelector('#screen');
+async function command(body){
+  try{
+    const r=await fetch('/api/input',{method:'POST',headers:{'Content-Type':'application/json','X-Control-Token':token},body:JSON.stringify(body)});
+    if(!r.ok)throw new Error();
+    statusEl.textContent='已连接';
+  }catch{statusEl.textContent='连接失败'}
+}
+let frameBusy=false;
+function refresh(){
+  if(frameBusy)return;frameBusy=true;
+  const img=new Image();
+  img.onload=()=>{screen.src=img.src;frameBusy=false};
+  img.onerror=()=>{frameBusy=false;statusEl.textContent='画面失败'};
+  img.src='/api/screen.jpg?token='+encodeURIComponent(token)+'&t='+Date.now();
+}
+fetch('/api/status?token='+encodeURIComponent(token)).then(r=>{
+  if(!r.ok)throw new Error();statusEl.textContent='已连接';refresh();setInterval(refresh,700);
+}).catch(()=>statusEl.textContent='密钥错误或未连接');
+
+const MOVE_LIMIT=8,LONG_PRESS=550;
+function imagePoint(e){
+  const r=screen.getBoundingClientRect();
+  const naturalRatio=(screen.naturalWidth||16)/(screen.naturalHeight||9),boxRatio=r.width/r.height;
+  let w=r.width,h=r.height,left=r.left,top=r.top;
+  if(naturalRatio>boxRatio){h=w/naturalRatio;top+=(r.height-h)/2}else{w=h*naturalRatio;left+=(r.width-w)/2}
+  return{x:Math.max(0,Math.min(1,(e.clientX-left)/w)),y:Math.max(0,Math.min(1,(e.clientY-top)/h))};
+}
+
+const screenWrap=document.querySelector('#screenWrap');
+const fullscreenBtn=document.querySelector('#fullscreenBtn'),exitFullscreen=document.querySelector('#exitFullscreen');
+const showKeyboard=document.querySelector('#showKeyboard');
+const mobileKeyboard=document.querySelector('#mobileKeyboard');
+const textInputBtn=document.querySelector('#textInputBtn'),fullscreenText=document.querySelector('#fullscreenText');
+let nativeFullscreen=false;
+async function enterFullscreen(){
+  document.body.classList.add('fullscreen-view');
+  if(document.documentElement.requestFullscreen){
+    try{await document.documentElement.requestFullscreen();nativeFullscreen=true}catch{}
+  }
+}
+async function leaveFullscreen(){
+  document.body.classList.remove('fullscreen-view');
+  document.body.classList.remove('keyboard-open');
+  document.body.classList.remove('text-panel-open');
+  fullscreenText.blur();
+  mobileKeyboard.blur();
+  nativeFullscreen=false;
+  if(document.fullscreenElement&&document.exitFullscreen){try{await document.exitFullscreen()}catch{}}
+}
+fullscreenBtn.addEventListener('click',enterFullscreen);
+exitFullscreen.addEventListener('pointerdown',e=>e.stopPropagation());
+exitFullscreen.addEventListener('click',e=>{e.stopPropagation();leaveFullscreen()});
+showKeyboard.addEventListener('pointerdown',e=>e.stopPropagation());
+showKeyboard.addEventListener('click',e=>{
+  e.stopPropagation();mobileKeyboard.blur();document.body.classList.remove('keyboard-open');
+  command({type:'open_keyboard'});
+});
+textInputBtn.addEventListener('pointerdown',e=>e.stopPropagation());
+textInputBtn.addEventListener('click',e=>{
+  e.stopPropagation();document.body.classList.add('text-panel-open');
+  try{fullscreenText.focus({preventScroll:true})}catch{fullscreenText.focus()}
+});
+function sendFullscreenText(){
+  const text=fullscreenText.value;
+  if(text){command({type:'text',text});fullscreenText.value=''}
+  fullscreenText.focus();
+}
+document.querySelector('#sendFullscreenText').onclick=sendFullscreenText;
+document.querySelector('#closeFullscreenText').onclick=()=>{
+  document.body.classList.remove('text-panel-open');fullscreenText.blur();
+};
+fullscreenText.addEventListener('keydown',event=>{
+  if(event.isComposing)return;
+  if(event.key==='Enter'){event.preventDefault();sendFullscreenText()}
+  else if(event.key==='Escape'){document.querySelector('#closeFullscreenText').click()}
+});
+document.addEventListener('fullscreenchange',()=>{
+  if(!document.fullscreenElement&&nativeFullscreen){nativeFullscreen=false;document.body.classList.remove('fullscreen-view')}
+});
+let direct=null,directLongTimer=0,directDown=false;
+function releaseDirect(){
+  clearTimeout(directLongTimer);
+  if(directDown){command({type:'button',button:'left',action:'up'});directDown=false}
+  direct=null;
+}
+function resetMobileKeyboard(){
+  mobileKeyboard.value='\u200b';
+  try{mobileKeyboard.setSelectionRange(1,1)}catch{}
+}
+function openMobileKeyboard(){
+  document.body.classList.add('keyboard-open');
+  resetMobileKeyboard();
+  try{mobileKeyboard.focus({preventScroll:true})}catch{mobileKeyboard.focus()}
+}
+mobileKeyboard.addEventListener('blur',()=>document.body.classList.remove('keyboard-open'));
+async function maybeOpenMobileKeyboard(){
+  if(!document.body.classList.contains('fullscreen-view'))return;
+  try{
+    const response=await fetch('/api/focus?token='+encodeURIComponent(token)+'&t='+Date.now());
+    if(!response.ok)return;
+    const result=await response.json();
+    if(result.acceptsText)openMobileKeyboard();
+    else mobileKeyboard.blur();
+  }catch{}
+}
+let mobileKeyboardComposing=false,ignoreNextKeyboardInput=false;
+mobileKeyboard.addEventListener('input',event=>{
+  if(mobileKeyboardComposing)return;
+  if(ignoreNextKeyboardInput){ignoreNextKeyboardInput=false;resetMobileKeyboard();return}
+  const inserted=mobileKeyboard.value.replaceAll('\u200b','');
+  if(inserted)command({type:'text',text:inserted});
+  else if(event.inputType&&event.inputType.startsWith('delete'))command({type:'key',keys:['backspace']});
+  resetMobileKeyboard();
+});
+mobileKeyboard.addEventListener('compositionstart',()=>{mobileKeyboardComposing=true});
+mobileKeyboard.addEventListener('compositionend',event=>{
+  mobileKeyboardComposing=false;
+  const text=mobileKeyboard.value.replaceAll('\u200b','')||event.data;
+  if(text)command({type:'text',text});
+  ignoreNextKeyboardInput=true;resetMobileKeyboard();
+  setTimeout(()=>{ignoreNextKeyboardInput=false},0);
+});
+mobileKeyboard.addEventListener('keydown',event=>{
+  const keys={Enter:'enter',Backspace:'backspace',Tab:'tab',Escape:'esc',ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down'};
+  const key=keys[event.key];
+  if(key){event.preventDefault();command({type:'key',keys:[key]});resetMobileKeyboard()}
+});
+screenWrap.addEventListener('pointerdown',e=>{
+  if(direct)return;e.preventDefault();screenWrap.setPointerCapture(e.pointerId);
+  const p=imagePoint(e);direct={id:e.pointerId,startX:e.clientX,startY:e.clientY,moved:false,long:false};
+  command({type:'absolute',x:p.x,y:p.y});
+  directLongTimer=setTimeout(()=>{if(direct&&!direct.moved){direct.long=true;command({type:'click',button:'right'})}},LONG_PRESS);
+});
+screenWrap.addEventListener('pointermove',e=>{
+  if(!direct||direct.id!==e.pointerId)return;e.preventDefault();
+  const distance=Math.hypot(e.clientX-direct.startX,e.clientY-direct.startY);
+  if(distance>MOVE_LIMIT&&!direct.moved){
+    direct.moved=true;clearTimeout(directLongTimer);
+    command({type:'button',button:'left',action:'down'});directDown=true;
+  }
+  if(direct.moved){const p=imagePoint(e);command({type:'absolute',x:p.x,y:p.y})}
+});
+screenWrap.addEventListener('pointerup',e=>{
+  if(!direct||direct.id!==e.pointerId)return;
+  clearTimeout(directLongTimer);
+  if(directDown)command({type:'button',button:'left',action:'up'});
+  else if(!direct.long){
+    command({type:'click',button:'left'});
+  }
+  directDown=false;direct=null;
+});
+screenWrap.addEventListener('pointercancel',releaseDirect);
+
+const pad=document.querySelector('#pad');
+let touches=new Map(),padLongTimer=0,padDragging=false,lastTap=0;
+function endPadDrag(){if(padDragging){command({type:'button',button:'left',action:'up'});padDragging=false}}
+pad.addEventListener('pointerdown',e=>{
+  e.preventDefault();pad.setPointerCapture(e.pointerId);
+  const now=Date.now(),secondTap=touches.size===0&&now-lastTap<350;
+  touches.set(e.pointerId,{x:e.clientX,y:e.clientY,startX:e.clientX,startY:e.clientY,start:now,moved:false,long:false,secondTap});
+  clearTimeout(padLongTimer);
+  if(touches.size===1)padLongTimer=setTimeout(()=>{
+    const p=touches.get(e.pointerId);if(p&&!p.moved){p.long=true;command({type:'click',button:'right'})}
+  },LONG_PRESS);
+});
+pad.addEventListener('pointermove',e=>{
+  const p=touches.get(e.pointerId);if(!p)return;e.preventDefault();
+  const dx=e.clientX-p.x,dy=e.clientY-p.y;p.x=e.clientX;p.y=e.clientY;
+  if(Math.hypot(e.clientX-p.startX,e.clientY-p.startY)>MOVE_LIMIT){p.moved=true;clearTimeout(padLongTimer)}
+  if(touches.size>1){endPadDrag();if(Math.abs(dy)>1)command({type:'scroll',amount:-dy/18});return}
+  if(p.secondTap&&p.moved&&!padDragging){command({type:'button',button:'left',action:'down'});padDragging=true}
+  command({type:'move',dx:dx*1.5,dy:dy*1.5});
+});
+function finishPad(e,cancelled){
+  const p=touches.get(e.pointerId);if(!p)return;
+  clearTimeout(padLongTimer);touches.delete(e.pointerId);
+  if(padDragging){endPadDrag();lastTap=0}
+  else if(!cancelled&&!p.moved&&!p.long&&Date.now()-p.start<350){command({type:'click',button:'left'});lastTap=Date.now()}
+  if(touches.size===0)clearTimeout(padLongTimer);
+}
+pad.addEventListener('pointerup',e=>finishPad(e,false));
+pad.addEventListener('pointercancel',e=>finishPad(e,true));
+window.addEventListener('blur',()=>{releaseDirect();endPadDrag();touches.clear()});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){releaseDirect();endPadDrag();touches.clear()}});
+
+document.querySelectorAll('[data-click]').forEach(b=>b.onclick=()=>command({type:'click',button:b.dataset.click}));
+document.querySelectorAll('[data-key]').forEach(b=>b.onclick=()=>command({type:'key',keys:b.dataset.key.split(',')}));
+document.querySelector('#send').onclick=()=>{const el=document.querySelector('#text');if(el.value){command({type:'text',text:el.value});el.value=''}};
+document.querySelector('#text').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();document.querySelector('#send').click()}});
+
+const cameraPanel=document.querySelector('#cameraPanel'),cameraImage=document.querySelector('#cameraImage');
+let cameraActive=false;
+function refreshCamera(){
+  if(!cameraActive)return;
+  const next=new Image();
+  next.onload=()=>{if(cameraActive){cameraImage.src=next.src;setTimeout(refreshCamera,120)}};
+  next.onerror=()=>{statusEl.textContent='摄像头打开失败';cameraActive=false};
+  next.src='/api/camera.jpg?token='+encodeURIComponent(token)+'&t='+Date.now();
+}
+document.querySelector('#openCamera').onclick=()=>{
+  cameraActive=true;cameraPanel.hidden=false;refreshCamera();
+};
+async function closeCamera(){
+  cameraActive=false;cameraPanel.hidden=true;cameraImage.removeAttribute('src');
+  try{await fetch('/api/camera/stop',{method:'POST',headers:{'X-Control-Token':token}})}catch{}
+}
+document.querySelector('#closeCamera').onclick=closeCamera;
+
+let audioContext=null;
+const audioStates={
+  system:{active:false,next:0,nodes:new Set(),button:document.querySelector('#systemAudio')},
+  microphone:{active:false,next:0,nodes:new Set(),button:document.querySelector('#microphoneAudio')}
+};
+async function audioLoop(kind){
+  const state=audioStates[kind];
+  while(state.active){
+    try{
+      const response=await fetch('/api/audio.wav?source='+kind+'&duration=1.5&token='+encodeURIComponent(token));
+      if(!response.ok){
+        let detail='服务返回 '+response.status;
+        try{const error=await response.json();if(error.error)detail=error.error}catch{}
+        throw new Error(detail);
+      }
+      const encoded=await response.arrayBuffer();
+      let buffer;
+      try{buffer=await audioContext.decodeAudioData(encoded)}catch{throw new Error('手机浏览器无法解码电脑音频')}
+      if(!state.active)break;
+      const source=audioContext.createBufferSource();
+      source.buffer=buffer;source.connect(audioContext.destination);state.nodes.add(source);
+      source.onended=()=>state.nodes.delete(source);
+      const start=Math.max(audioContext.currentTime+.04,state.next);
+      source.start(start);state.next=start+buffer.duration;
+    }catch(error){
+      state.active=false;state.button.classList.remove('active');
+      state.button.textContent=kind==='system'?'电脑声音':'电脑麦克风';
+      statusEl.textContent=(kind==='system'?'电脑声音失败：':'麦克风失败：')+error.message;
+    }
+  }
+}
+function unlockAudioContext(context){
+  const buffer=context.createBuffer(1,1,22050),source=context.createBufferSource();
+  source.buffer=buffer;source.connect(context.destination);source.start(0);
+}
+async function toggleAudio(kind){
+  const state=audioStates[kind],normal=kind==='system'?'电脑声音':'电脑麦克风';
+  if(state.active){
+    state.active=false;state.next=0;state.nodes.forEach(node=>{try{node.stop()}catch{}});state.nodes.clear();
+    state.button.classList.remove('active');state.button.textContent=normal;return;
+  }
+  audioContext=audioContext||new (window.AudioContext||window.webkitAudioContext)();
+  unlockAudioContext(audioContext);
+  await audioContext.resume();state.active=true;state.next=0;
+  state.button.classList.add('active');state.button.textContent='停止'+normal;audioLoop(kind);
+}
+audioStates.system.button.onclick=()=>toggleAudio('system');
+audioStates.microphone.button.onclick=()=>toggleAudio('microphone');
+
+const pushToTalk=document.querySelector('#pushToTalk'),liveTalk=document.querySelector('#liveTalk');
+let phoneMicWanted=false,phoneMicMode='',phoneMicStarting=false,phoneMicStream=null;
+let phoneMicContext=null,phoneMicSource=null,phoneMicProcessor=null,phoneMicSilentGain=null;
+let phoneMicQueue=[],phoneMicSending=false;
+function updatePhoneMicButtons(){
+  pushToTalk.classList.toggle('active',phoneMicWanted&&phoneMicMode==='push');
+  pushToTalk.textContent=phoneMicWanted&&phoneMicMode==='push'?'正在说话…':'按住说话';
+  liveTalk.classList.toggle('active',phoneMicWanted&&phoneMicMode==='live');
+  liveTalk.textContent=phoneMicWanted&&phoneMicMode==='live'?'停止实时对讲':'开启实时对讲';
+}
+async function pumpPhoneMic(){
+  if(phoneMicSending)return;phoneMicSending=true;
+  while(phoneMicWanted&&phoneMicQueue.length){
+    const block=phoneMicQueue.shift();
+    try{
+      const response=await fetch('/api/phone-mic',{method:'POST',headers:{
+        'Content-Type':'application/octet-stream','X-Control-Token':token,'X-Sample-Rate':String(block.rate)
+      },body:block.data});
+      if(!response.ok)throw new Error();
+    }catch{
+      statusEl.textContent='手机麦克风传输失败';await stopPhoneMic();break;
+    }
+  }
+  phoneMicSending=false;
+}
+async function startPhoneMic(mode){
+  phoneMicWanted=true;phoneMicMode=mode;updatePhoneMicButtons();
+  if(phoneMicStream||phoneMicStarting)return;phoneMicStarting=true;
+  try{
+    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)throw new Error('请使用 HTTPS 地址打开');
+    const stream=await navigator.mediaDevices.getUserMedia({audio:{
+      channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true
+    }});
+    if(!phoneMicWanted){stream.getTracks().forEach(track=>track.stop());return}
+    phoneMicStream=stream;
+    phoneMicContext=new (window.AudioContext||window.webkitAudioContext)();
+    await phoneMicContext.resume();
+    phoneMicSource=phoneMicContext.createMediaStreamSource(stream);
+    phoneMicProcessor=phoneMicContext.createScriptProcessor(4096,1,1);
+    phoneMicSilentGain=phoneMicContext.createGain();phoneMicSilentGain.gain.value=0;
+    phoneMicProcessor.onaudioprocess=event=>{
+      if(!phoneMicWanted)return;
+      const input=event.inputBuffer.getChannelData(0),pcm=new Int16Array(input.length);
+      for(let i=0;i<input.length;i++)pcm[i]=Math.max(-32768,Math.min(32767,input[i]*32767));
+      if(phoneMicQueue.length>12)phoneMicQueue.shift();
+      phoneMicQueue.push({rate:phoneMicContext.sampleRate,data:pcm.buffer});pumpPhoneMic();
+    };
+    phoneMicSource.connect(phoneMicProcessor);phoneMicProcessor.connect(phoneMicSilentGain);
+    phoneMicSilentGain.connect(phoneMicContext.destination);
+    statusEl.textContent=mode==='push'?'按住说话已开启':'实时对讲已开启';
+  }catch(error){
+    phoneMicWanted=false;phoneMicMode='';updatePhoneMicButtons();
+    statusEl.textContent='手机麦克风失败：'+error.message;
+  }finally{phoneMicStarting=false}
+}
+async function stopPhoneMic(){
+  phoneMicWanted=false;phoneMicMode='';phoneMicQueue=[];updatePhoneMicButtons();
+  if(phoneMicProcessor){phoneMicProcessor.onaudioprocess=null;phoneMicProcessor.disconnect()}
+  if(phoneMicSource)phoneMicSource.disconnect();
+  if(phoneMicSilentGain)phoneMicSilentGain.disconnect();
+  if(phoneMicStream)phoneMicStream.getTracks().forEach(track=>track.stop());
+  if(phoneMicContext){try{await phoneMicContext.close()}catch{}}
+  phoneMicStream=null;phoneMicContext=null;phoneMicSource=null;phoneMicProcessor=null;phoneMicSilentGain=null;
+  try{await fetch('/api/phone-mic/stop',{method:'POST',headers:{'X-Control-Token':token}})}catch{}
+}
+pushToTalk.addEventListener('pointerdown',e=>{
+  e.preventDefault();pushToTalk.setPointerCapture(e.pointerId);startPhoneMic('push');
+});
+for(const eventName of ['pointerup','pointercancel','lostpointercapture']){
+  pushToTalk.addEventListener(eventName,()=>{if(phoneMicMode==='push')stopPhoneMic()});
+}
+liveTalk.onclick=()=>phoneMicWanted&&phoneMicMode==='live'?stopPhoneMic():startPhoneMic('live');
+
+function formatSize(bytes){
+  if(bytes<1024)return bytes+' B';if(bytes<1048576)return(bytes/1024).toFixed(1)+' KB';
+  return(bytes/1048576).toFixed(1)+' MB';
+}
+async function refreshFiles(){
+  const list=document.querySelector('#fileList'),message=document.querySelector('#fileStatus');
+  try{
+    const response=await fetch('/api/files?token='+encodeURIComponent(token));
+    if(!response.ok)throw new Error();const data=await response.json();list.replaceChildren();
+    data.files.forEach(file=>{
+      const link=document.createElement('a');link.className='file-item';
+      link.href='/api/files/download?token='+encodeURIComponent(token)+'&name='+encodeURIComponent(file.name);
+      const name=document.createElement('span'),size=document.createElement('small');
+      name.textContent=file.name;size.textContent=formatSize(file.size);link.append(name,size);list.append(link);
+    });
+    message.textContent=data.files.length?'点击文件下载':'电脑 shared_files 文件夹为空';
+  }catch{message.textContent='读取文件列表失败'}
+}
+document.querySelector('#refreshFiles').onclick=refreshFiles;
+document.querySelector('#uploadFile').onchange=async e=>{
+  const file=e.target.files[0],message=document.querySelector('#fileStatus');if(!file)return;
+  if(file.size>512*1024*1024){message.textContent='文件不能超过 512 MB';return}
+  message.textContent='正在上传 '+file.name+'…';
+  try{
+    const response=await fetch('/api/files/upload',{method:'POST',headers:{'X-Control-Token':token,'X-File-Name':encodeURIComponent(file.name)},body:file});
+    const result=await response.json();if(!response.ok)throw new Error(result.error||'upload failed');
+    message.textContent='已保存到电脑 received_files：'+result.name;
+  }catch(error){message.textContent='上传失败：'+error.message}
+  e.target.value='';
+};
+refreshFiles();
+window.addEventListener('beforeunload',()=>{if(phoneMicStream)phoneMicStream.getTracks().forEach(track=>track.stop())});
+</script>
+</body>
+</html>

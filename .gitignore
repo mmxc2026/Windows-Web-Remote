@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# Runtime files
+startup-error.log
+received_files/*
+!received_files/.gitkeep
+shared_files/*
+!shared_files/.gitkeep
+
+# Downloaded third-party binary
+tools/
+
+# Editors and operating systems
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Codex local metadata
+.agents/
+.codex/
